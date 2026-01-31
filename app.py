@@ -81,10 +81,16 @@ def health():
 # Telegram бот
 def telegram_bot():
     TOKEN = os.environ.get('8248650023:AAHYIqTPxUFxVw_RdgqiGOHgyphcna1U8Mo')
-    if not TOKEN:
+    
+    # Ожидание токена, если он не сразу доступен
+    while not TOKEN:
         print("❌ TELEGRAM_BOT_TOKEN не найден")
-        print("💡 Добавь в Koyeb: Settings → Environment Variables")
-        return
+        print("💡 Добавьте токен в Koyeb: Settings → Environment Variables")
+        print("⏳ Ожидание 10 секунд...")
+        time.sleep(10)
+        TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
+    
+    print("✅ Токен найден! Запускаю бота...")
     
     API_URL = f"https://api.telegram.org/bot{TOKEN}/"
     
@@ -114,8 +120,8 @@ def telegram_bot():
         try:
             resp = requests.get(
                 f"{API_URL}getUpdates",
-                params={"offset": last_update_id + 1, "timeout": 10},  # Уменьшили timeout
-                timeout=15  # Добавили timeout для запроса
+                params={"offset": last_update_id + 1, "timeout": 10},
+                timeout=15
             )
             
             if resp.status_code == 200:
