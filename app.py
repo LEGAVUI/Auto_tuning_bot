@@ -1,115 +1,137 @@
 import os
-import asyncio
+import requests
+import time
 from flask import Flask
 import threading
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
+from datetime import datetime
+
+print("=" * 50)
+print("🚗 АВТОСЕРВИС БОТ (СТАБИЛЬНАЯ ВЕРСИЯ)")
+print("=" * 50)
 
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🚗 Автосервис Бот работает"
+    return "✅ Бот работает"
 
 @app.route('/health')
 def health():
     return "OK", 200
 
-# Обработчики
-async def start(update: Update, context: CallbackContext):
-    keyboard = [["📋 МЕНЮ"], ["📱 СОЦСЕТИ"], ["📞 КОНТАКТЫ"], ["📍 АДРЕС"]]
-    await update.message.reply_text(
-        "🚗 Добро пожаловать в автосервис!\n👇 Выберите раздел:",
-        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    )
-
-async def menu(update: Update, context: CallbackContext):
-    await update.message.reply_text(
-        "🔧 НАШИ УСЛУГИ:\n\n"
-        "• Диагностика - 2000р\n"
-        "• Чип-тюнинг - 5000р\n"
-        "• Прошивка ЭБУ - 4500р\n"
-        "• Услуги автоэлектрика"
-    )
-
-async def social(update: Update, context: CallbackContext):
-    await update.message.reply_text(
-        "📱 МЫ В СОЦСЕТЯХ:\n\n"
-        "• Instagram: instagram.com/chiptuning_service_fake\n\n"
-        "• Авито: avito.ru/avtoelektrik_diagnost_7856909160"
-    )
-
-async def contacts(update: Update, context: CallbackContext):
-    await update.message.reply_text(
-        "📞 НАШИ КОНТАКТЫ:\n\n"
-        "• Телефон: +7 922 433-35-45\n"
-        "• WhatsApp: wa.me/79224333545\n"
-        "• Telegram: t.me/+79224333545"
-    )
-
-async def address(update: Update, context: CallbackContext):
-    await update.message.reply_text(
-        "📍 НАШ АДРЕС:\nул. Пушкина, Дом 9а\n\n🕒 9:00-19:00 ежедневно"
-    )
-
-async def handle_message(update: Update, context: CallbackContext):
-    text = update.message.text
+# Telegram бот
+def telegram_bot():
+    # Ждём токен
+    for i in range(10):
+        TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
+        if TOKEN:
+            print(f"✅ Токен получен (попытка {i+1})")
+            break
+        print(f"⏳ Ожидание токена... {i+1}/10")
+        time.sleep(2)
+    else:
+        print("❌ Токен не найден. Бот остановлен.")
+        return
     
-    if text == "📋 МЕНЮ":
-        await menu(update, context)
-    elif text == "📱 СОЦСЕТИ":
-        await social(update, context)
-    elif text == "📞 КОНТАКТЫ":
-        await contacts(update, context)
-    elif text == "📍 АДРЕС":
-        await address(update, context)
-
-# Запуск бота с правильным event loop
-def run_bot():
-    TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
+    API_URL = f"https://api.telegram.org/bot{TOKEN}/"
     
-    if not TOKEN:
-        print("❌ TELEGRAM_BOT_TOKEN не найден")
-        # Ждём токен
-        import time
-        for _ in range(30):
-            TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
-            if TOKEN:
-                break
-            time.sleep(2)
+    # Контакты
+    AVITO_LINK = "https://www.avito.ru/kizilyurt/predlozheniya_uslug/avtoelektrik_diagnost_7856909160"
+    PHONE = "+7 922 433-35-45"
+    
+    keyboard = {
+        "keyboard": [
+            [{"text": "📋 МЕНЮ"}],
+            [{"text": "📱 СОЦСЕТИ"}],
+            [{"text": "📞 КОНТАКТЫ"}],
+            [{"text": "📍 АДРЕС"}]
+        ],
+        "resize_keyboard": True
+    }
+    
+    last_update_id = 0
+    error_count = 0
+    
+    print("🤖 Бот запущен. Ожидание сообщений...")
+    
+    while True:
+        try:
+            # ОЧЕНЬ КОРОТКИЙ запрос
+            resp = requests.get(
+                f"{API_URL}getUpdates",
+                params={"offset": last_update_id + 1, "timeout": 1, "limit": 1},
+                timeout=2
+            )
+            
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("ok"):
+                    updates = data.get("result", [])
+                    
+                    for update in updates:
+                        last_update_id = update["update_id"]
+                        
+                        if "message" in update:
+                            chat_id = update["message"]["chat"]["id"]
+                            text = update["message"].get("text", "").strip()
+                            
+                            print(f"📩 Получено: {text}")
+                            
+                            # /start
+                            if "/start" in text.lower():
+                                requests.post(f"{API_URL}sendMessage", json={
+                                    "chat_id": chat_id,
+                                    "text": "🚗 Добро пожаловать!\n👇 Выберите:",
+                                    "reply_markup": keyboard
+                                }, timeout=2)
+                                continue
+                            
+                            # Быстрые ответы
+                            if text == "📋 МЕНЮ":
+                                requests.post(f"{API_URL}sendMessage", json={
+                                    "chat_id": chat_id,
+                                    "text": "🔧 УСЛУГИ:\n• Диагностика - 2000р\n• Чип-тюнинг - 5000р\n• Прошивка ЭБУ - 4500р"
+                                }, timeout=2)
+                            
+                            elif text == "📱 СОЦСЕТИ":
+                                requests.post(f"{API_URL}sendMessage", json={
+                                    "chat_id": chat_id,
+                                    "text": f"📱 СОЦСЕТИ:\n• Авито: {AVITO_LINK}\n• Instagram: instagram.com/chiptuning_service_fake"
+                                }, timeout=2)
+                            
+                            elif text == "📞 КОНТАКТЫ":
+                                requests.post(f"{API_URL}sendMessage", json={
+                                    "chat_id": chat_id,
+                                    "text": f"📞 КОНТАКТЫ:\n• {PHONE}\n• WhatsApp: wa.me/79224333545\n• Telegram: t.me/+79224333545"
+                                }, timeout=2)
+                            
+                            elif text == "📍 АДРЕС":
+                                requests.post(f"{API_URL}sendMessage", json={
+                                    "chat_id": chat_id,
+                                    "text": "📍 АДРЕС:\nул. Пушкина, 9а\n🕒 9:00-19:00"
+                                }, timeout=2)
+            
+            error_count = 0  # Сброс счётчика ошибок
+            
+        except requests.exceptions.RequestException as e:
+            error_count += 1
+            if error_count % 10 == 0:  # Логируем каждую 10-ю ошибку
+                print(f"⚠️ Ошибка сети ({error_count}): {type(e).__name__}")
+            
+            if error_count > 30:  # Если много ошибок подряд
+                print("🔄 Перезагрузка из-за множества ошибок...")
+                time.sleep(5)
+                error_count = 0
+            
+            time.sleep(0.1)
         
-        if not TOKEN:
-            print("❌ Токен так и не найден")
-            return
-    
-    print("✅ Токен найден! Запускаю бота...")
-    
-    # Создаём новый event loop для этого потока
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    
-    # Создаём приложение
-    application = Application.builder().token(TOKEN).build()
-    
-    # Регистрируем обработчики
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
-    print("🤖 Бот запущен и слушает сообщения...")
-    
-    # Запускаем бота в этом event loop
-    try:
-        loop.run_until_complete(application.run_polling())
-    finally:
-        loop.close()
+        except Exception as e:
+            print(f"❌ Неизвестная ошибка: {e}")
+            time.sleep(1)
 
-# Запускаем бота в отдельном потоке
-bot_thread = threading.Thread(target=run_bot, daemon=True)
-bot_thread.start()
+# Запускаем бота
+threading.Thread(target=telegram_bot, daemon=True).start()
 
 if __name__ == '__main__':
-    print("🌐 Запуск Flask сервера...")
-    print("=" * 50)
-    print("🚗 АВТОСЕРВИС БОТ ЗАПУЩЕН")
-    print("=" * 50)
+    print("🌐 Flask сервер запускается...")
     app.run(host='0.0.0.0', port=8080, debug=False, threaded=True)
