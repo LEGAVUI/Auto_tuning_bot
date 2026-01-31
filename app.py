@@ -80,7 +80,7 @@ def health():
 
 # Telegram бот
 def telegram_bot():
-    TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
+    TOKEN = os.environ.get('8248650023:AAHYIqTPxUFxVw_RdgqiGOHgyphcna1U8Mo')
     if not TOKEN:
         print("❌ TELEGRAM_BOT_TOKEN не найден")
         print("💡 Добавь в Koyeb: Settings → Environment Variables")
@@ -114,7 +114,8 @@ def telegram_bot():
         try:
             resp = requests.get(
                 f"{API_URL}getUpdates",
-                params={"offset": last_update_id + 1, "timeout": 30}
+                params={"offset": last_update_id + 1, "timeout": 10},  # Уменьшили timeout
+                timeout=15  # Добавили timeout для запроса
             )
             
             if resp.status_code == 200:
@@ -179,8 +180,14 @@ def telegram_bot():
             
             time.sleep(1)
             
+        except requests.exceptions.ConnectionError as e:
+            print(f"📡 Ошибка подключения (переподключение через 10с): {e}")
+            time.sleep(10)
+        except requests.exceptions.Timeout as e:
+            print(f"⏰ Таймаут запроса (переподключение через 5с): {e}")
+            time.sleep(5)
         except Exception as e:
-            print(f"⚠️ Ошибка бота: {e}")
+            print(f"⚠️ Ошибка бота (переподключение через 5с): {e}")
             time.sleep(5)
 
 # Запускаем бота в фоне
