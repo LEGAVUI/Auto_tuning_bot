@@ -5,8 +5,22 @@ from flask import Flask
 import threading
 from datetime import datetime
 
-# Небольшая задержка для стабильного запуска
-time.sleep(3)
+# Сохраняем offset в файл для надёжности
+OFFSET_FILE = "/tmp/last_offset.txt"
+
+def save_last_offset(offset):
+    try:
+        with open(OFFSET_FILE, 'w') as f:
+            f.write(str(offset))
+    except:
+        pass
+
+def load_last_offset():
+    try:
+        with open(OFFSET_FILE, 'r') as f:
+            return int(f.read().strip())
+    except:
+        return 0
 
 print("=" * 50)
 print("🚗 АВТОСЕРВИС БОТ НА KOYEB")
@@ -22,54 +36,17 @@ def home():
     <html>
     <head>
         <title>🚗 Автосервис Бот</title>
-        <meta charset="utf-8">
         <style>
-            body {{
-                font-family: Arial, sans-serif;
-                text-align: center;
-                padding: 50px;
-                background: #f5f5f5;
-            }}
-            .container {{
-                background: white;
-                padding: 40px;
-                border-radius: 10px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                max-width: 600px;
-                margin: 0 auto;
-            }}
-            h1 {{
-                color: #2c3e50;
-            }}
-            .status {{
-                color: #27ae60;
-                font-size: 1.2em;
-                margin: 20px 0;
-            }}
-            .info {{
-                text-align: left;
-                margin: 20px 0;
-                padding: 15px;
-                background: #f8f9fa;
-                border-radius: 5px;
-            }}
+            body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f5f5f5; }}
+            .container {{ background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 600px; margin: 0 auto; }}
+            h1 {{ color: #2c3e50; }}
+            .status {{ color: #27ae60; font-size: 1.2em; margin: 20px 0; }}
         </style>
     </head>
     <body>
         <div class="container">
             <h1>🚗 Автосервис Бот</h1>
             <div class="status">✅ Бот работает на Koyeb</div>
-            
-            <div class="info">
-                <p><strong>🤖 Функции бота:</strong></p>
-                <ul>
-                    <li>Меню услуг автосервиса</li>
-                    <li>Ссылка на Авито с услугами автоэлектрика</li>
-                    <li>Контакты для связи: +7 922 433-35-45</li>
-                    <li>Адрес: ул. Пушкина, Дом 9а</li>
-                </ul>
-            </div>
-            
             <p>Бот работает 24/7 без перерывов</p>
             <p>🕒 Время сервера: {current_time}</p>
         </div>
@@ -83,19 +60,25 @@ def health():
 
 # Telegram бот
 def telegram_bot():
-    TOKEN = os.environ.get('8248650023:AAHYIqTPxUFxVw_RdgqiGOHgyphcna1U8Mo')
+    # Ждём токен с таймаутом
+    max_wait = 30
+    waited = 0
     
-    # Ожидание токена, если он не сразу доступен
-    while not TOKEN:
-        print("❌ TELEGRAM_BOT_TOKEN не найден")
-        print("💡 Добавьте токен в Koyeb: Settings → Environment Variables")
-        print("⏳ Ожидание 10 секунд...")
-        time.sleep(10)
+    while waited < max_wait:
         TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
+        if TOKEN:
+            break
+        print(f"⏳ Ожидание токена... ({waited}/{max_wait} сек)")
+        time.sleep(2)
+        waited += 2
     
-    print("✅ Токен найден! Запускаю бота...")
+    if not TOKEN:
+        print("❌ Токен не найден. Бот будет работать в тестовом режиме.")
+        TOKEN = "dummy_token"  # Заглушка для продолжения работы
     
-    API_URL = f"https://api.telegram.org/bot{TOKEN}/"
+    print(f"✅ Токен получен! Бот запускается...")
+    
+    API_URL = f"https://api.telegram.org/bot{TOKEN}/" if TOKEN != "dummy_token" else None
     
     # Контакты
     AVITO_LINK = "https://www.avito.ru/kizilyurt/predlozheniya_uslug/avtoelektrik_diagnost_7856909160"
@@ -103,7 +86,6 @@ def telegram_bot():
     WHATSAPP_LINK = "https://wa.me/79224333545"
     TELEGRAM_LINK = "https://t.me/+79224333545"
     
-    # Меню
     keyboard = {
         "keyboard": [
             [{"text": "📋 МЕНЮ"}],
@@ -114,18 +96,22 @@ def telegram_bot():
         "resize_keyboard": True
     }
     
-    last_update_id = 0
+    last_update_id = load_last_offset()
     
     print("✅ Telegram бот запущен")
     print("🤖 Ожидание сообщений...")
     
     while True:
         try:
-            # Баланс скорости и стабильности
+            if API_URL is None:  # Режим без токена
+                time.sleep(5)
+                continue
+            
+            # Быстрый запрос
             resp = requests.get(
                 f"{API_URL}getUpdates",
-                params={"offset": last_update_id + 1, "timeout": 5},
-                timeout=10
+                params={"offset": last_update_id + 1, "timeout": 3},
+                timeout=5
             )
             
             if resp.status_code == 200:
@@ -133,76 +119,77 @@ def telegram_bot():
                 if data.get("ok"):
                     updates = data.get("result", [])
                     
-                    for update in updates:
-                        last_update_id = update["update_id"]
-                        
-                        if "message" in update:
-                            chat_id = update["message"]["chat"]["id"]
-                            text = update["message"].get("text", "")
+                    if updates:
+                        for update in updates:
+                            last_update_id = update["update_id"]
+                            save_last_offset(last_update_id)
                             
-                            # /start
-                            if "/start" in text.lower():
-                                requests.post(f"{API_URL}sendMessage", json={
-                                    "chat_id": chat_id,
-                                    "text": "🚗 Добро пожаловать в автосервис!\n👇 Выберите раздел:",
-                                    "reply_markup": keyboard
-                                }, timeout=5)
-                            
-                            # Меню
-                            elif text == "📋 МЕНЮ":
-                                requests.post(f"{API_URL}sendMessage", json={
-                                    "chat_id": chat_id,
-                                    "text": "🔧 НАШИ УСЛУГИ:\n\n• Диагностика - 2000р\n• Чип-тюнинг - 5000р\n• Прошивка ЭБУ - 4500р\n• Услуги автоэлектрика"
-                                }, timeout=5)
-                            
-                            elif text == "📱 СОЦСЕТИ":
-                                message_text = (
-                                    "📱 МЫ В СОЦСЕТЯХ:\n\n"
-                                    "• Instagram: instagram.com/chiptuning_service_fake\n\n"
-                                    f"• <a href='{AVITO_LINK}'>Авито</a> - наши услуги автоэлектрика\n\n"
-                                    "Нажмите на 'Авито' для перехода"
-                                )
-                                requests.post(f"{API_URL}sendMessage", json={
-                                    "chat_id": chat_id,
-                                    "text": message_text,
-                                    "parse_mode": "HTML"
-                                }, timeout=5)
-                            
-                            elif text == "📞 КОНТАКТЫ":
-                                message_text = (
-                                    "📞 НАШИ КОНТАКТЫ:\n\n"
-                                    f"• Телефон: {PHONE_NUMBER}\n\n"
-                                    f"• <a href='{WHATSAPP_LINK}'>WhatsApp</a>\n"
-                                    f"• <a href='{TELEGRAM_LINK}'>Telegram</a>\n\n"
-                                    "Нажмите на ссылки для связи"
-                                )
-                                requests.post(f"{API_URL}sendMessage", json={
-                                    "chat_id": chat_id,
-                                    "text": message_text,
-                                    "parse_mode": "HTML"
-                                }, timeout=5)
-                            
-                            elif text == "📍 АДРЕС":
-                                requests.post(f"{API_URL}sendMessage", json={
-                                    "chat_id": chat_id,
-                                    "text": "📍 НАШ АДРЕС:\nул. Пушкина, Дом 9а\n\n🕒 9:00-19:00 ежедневно"
-                                }, timeout=5)
+                            if "message" in update:
+                                chat_id = update["message"]["chat"]["id"]
+                                text = update["message"].get("text", "")
+                                
+                                print(f"📩 Получено: {text[:50]}")
+                                
+                                # /start
+                                if "/start" in text.lower():
+                                    requests.post(f"{API_URL}sendMessage", json={
+                                        "chat_id": chat_id,
+                                        "text": "🚗 Добро пожаловать в автосервис!\n👇 Выберите раздел:",
+                                        "reply_markup": keyboard
+                                    }, timeout=3)
+                                
+                                # Меню
+                                elif text == "📋 МЕНЮ":
+                                    requests.post(f"{API_URL}sendMessage", json={
+                                        "chat_id": chat_id,
+                                        "text": "🔧 НАШИ УСЛУГИ:\n\n• Диагностика - 2000р\n• Чип-тюнинг - 5000р\n• Прошивка ЭБУ - 4500р\n• Услуги автоэлектрика"
+                                    }, timeout=3)
+                                
+                                elif text == "📱 СОЦСЕТИ":
+                                    message_text = (
+                                        "📱 МЫ В СОЦСЕТЯХ:\n\n"
+                                        f"• Instagram: instagram.com/chiptuning_service_fake\n\n"
+                                        f"• <a href='{AVITO_LINK}'>Авито</a> - наши услуги автоэлектрика\n\n"
+                                        "Нажмите на 'Авито' для перехода"
+                                    )
+                                    requests.post(f"{API_URL}sendMessage", json={
+                                        "chat_id": chat_id,
+                                        "text": message_text,
+                                        "parse_mode": "HTML"
+                                    }, timeout=3)
+                                
+                                elif text == "📞 КОНТАКТЫ":
+                                    message_text = (
+                                        "📞 НАШИ КОНТАКТЫ:\n\n"
+                                        f"• Телефон: {PHONE_NUMBER}\n\n"
+                                        f"• <a href='{WHATSAPP_LINK}'>WhatsApp</a>\n"
+                                        f"• <a href='{TELEGRAM_LINK}'>Telegram</a>\n\n"
+                                        "Нажмите на ссылки для связи"
+                                    )
+                                    requests.post(f"{API_URL}sendMessage", json={
+                                        "chat_id": chat_id,
+                                        "text": message_text,
+                                        "parse_mode": "HTML"
+                                    }, timeout=3)
+                                
+                                elif text == "📍 АДРЕС":
+                                    requests.post(f"{API_URL}sendMessage", json={
+                                        "chat_id": chat_id,
+                                        "text": "📍 НАШ АДРЕС:\nул. Пушкина, Дом 9а\n\n🕒 9:00-19:00 ежедневно"
+                                    }, timeout=3)
             
-            time.sleep(0.5)  # Небольшая пауза между запросами
+            # Короткая пауза
+            time.sleep(0.1)
             
-        except requests.exceptions.ConnectionError as e:
-            print(f"📡 Ошибка подключения (переподключение через 5с): {e}")
-            time.sleep(5)
-        except requests.exceptions.Timeout as e:
-            # Таймаут - это нормально, просто продолжаем
-            pass
+        except requests.exceptions.RequestException as e:
+            print(f"⚠️ Сетевая ошибка (продолжаю): {type(e).__name__}")
+            time.sleep(2)
         except Exception as e:
-            print(f"⚠️ Ошибка бота (переподключение через 5с): {e}")
+            print(f"❌ Критическая ошибка: {e}")
             time.sleep(5)
 
-# Запускаем бота в фоне
-bot_thread = threading.Thread(target=telegram_bot, daemon=True)
-bot_thread.start()
+# Запускаем бота
+threading.Thread(target=telegram_bot, daemon=True).start()
 
 if __name__ == '__main__':
     print("🌐 Запуск Flask сервера...")
