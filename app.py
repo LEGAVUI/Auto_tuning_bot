@@ -3,10 +3,9 @@ import requests
 import time
 from flask import Flask
 import threading
-from datetime import datetime
 
 print("=" * 50)
-print("🚗 АВТОСЕРВИС БОТ (СТАБИЛЬНАЯ ВЕРСИЯ)")
+print("🚗 АВТОСЕРВИС БОТ (ДЕБАГ РЕЖИМ)")
 print("=" * 50)
 
 app = Flask(__name__)
@@ -19,47 +18,25 @@ def home():
 def health():
     return "OK", 200
 
-# Telegram бот
 def telegram_bot():
-    # Ждём токен
-    for i in range(10):
-        TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
-        if TOKEN:
-            print(f"✅ Токен получен (попытка {i+1})")
-            break
-        print(f"⏳ Ожидание токена... {i+1}/10")
-        time.sleep(2)
-    else:
-        print("❌ Токен не найден. Бот остановлен.")
+    # Получаем токен
+    TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
+    if not TOKEN:
+        print("❌ Токен не найден")
         return
     
+    print(f"✅ Токен: {TOKEN[:10]}...")
     API_URL = f"https://api.telegram.org/bot{TOKEN}/"
     
-    # Контакты
-    AVITO_LINK = "https://www.avito.ru/kizilyurt/predlozheniya_uslug/avtoelektrik_diagnost_7856909160"
-    PHONE = "+7 922 433-35-45"
-    
-    keyboard = {
-        "keyboard": [
-            [{"text": "📋 МЕНЮ"}],
-            [{"text": "📱 СОЦСЕТИ"}],
-            [{"text": "📞 КОНТАКТЫ"}],
-            [{"text": "📍 АДРЕС"}]
-        ],
-        "resize_keyboard": True
-    }
-    
     last_update_id = 0
-    error_count = 0
     
     print("🤖 Бот запущен. Ожидание сообщений...")
     
     while True:
         try:
-            # ОЧЕНЬ КОРОТКИЙ запрос
             resp = requests.get(
                 f"{API_URL}getUpdates",
-                params={"offset": last_update_id + 1, "timeout": 1, "limit": 1},
+                params={"offset": last_update_id + 1, "timeout": 1},
                 timeout=2
             )
             
@@ -75,10 +52,26 @@ def telegram_bot():
                             chat_id = update["message"]["chat"]["id"]
                             text = update["message"].get("text", "").strip()
                             
-                            print(f"📩 Получено: {text}")
+                            # ========== ДЕБАГ ВЫВОД ==========
+                            print("\n" + "="*50)
+                            print(f"📩 СООБЩЕНИЕ ОТ ПОЛЬЗОВАТЕЛЯ:")
+                            print(f"Текст: '{text}'")
+                            print(f"Длина: {len(text)}")
+                            print(f"Коды символов: {[ord(c) for c in text]}")
+                            print("="*50 + "\n")
+                            # ================================
                             
                             # /start
                             if "/start" in text.lower():
+                                keyboard = {
+                                    "keyboard": [
+                                        [{"text": "📋 МЕНЮ"}],
+                                        [{"text": "📱 СОЦСЕТИ"}],
+                                        [{"text": "📞 КОНТАКТЫ"}],
+                                        [{"text": "📍 АДРЕС"}]
+                                    ],
+                                    "resize_keyboard": True
+                                }
                                 requests.post(f"{API_URL}sendMessage", json={
                                     "chat_id": chat_id,
                                     "text": "🚗 Добро пожаловать!\n👇 Выберите:",
@@ -86,47 +79,46 @@ def telegram_bot():
                                 }, timeout=2)
                                 continue
                             
-                            # Быстрые ответы
-                            if text == "📋 МЕНЮ":
+                            # УНИВЕРСАЛЬНАЯ ПРОВЕРКА
+                            text_lower = text.lower()
+                            
+                            # 1. МЕНЮ
+                            if "меню" in text_lower or "📋" in text:
+                                print("✅ Обрабатываю: МЕНЮ")
                                 requests.post(f"{API_URL}sendMessage", json={
                                     "chat_id": chat_id,
-                                    "text": "🔧 УСЛУГИ:\n• Диагностика - 2000р\n• Чип-тюнинг - 5000р\n• Прошивка ЭБУ - 4500р"
+                                    "text": "🔧 НАШИ УСЛУГИ:\n\n• Диагностика - 2000р\n• Чип-тюнинг - 5000р\n• Прошивка ЭБУ - 4500р\n• Услуги автоэлектрика"
                                 }, timeout=2)
                             
-                            elif text == "📱 СОЦСЕТИ":
+                            # 2. СОЦСЕТИ
+                            elif "соцсети" in text_lower or "📱" in text:
+                                print("✅ Обрабатываю: СОЦСЕТИ")
                                 requests.post(f"{API_URL}sendMessage", json={
                                     "chat_id": chat_id,
-                                    "text": f"📱 СОЦСЕТИ:\n• Авито: {AVITO_LINK}\n• Instagram: instagram.com/chiptuning_service_fake"
+                                    "text": "📱 МЫ В СОЦСЕТЯХ:\n\n• Instagram: instagram.com/chiptuning_service_fake\n\n• Авито: https://www.avito.ru/avtoelektrik_diagnost_7856909160"
                                 }, timeout=2)
                             
-                            elif text == "📞 КОНТАКТЫ":
+                            # 3. КОНТАКТЫ
+                            elif "контакт" in text_lower or "📞" in text:
+                                print("✅ Обрабатываю: КОНТАКТЫ")
                                 requests.post(f"{API_URL}sendMessage", json={
                                     "chat_id": chat_id,
-                                    "text": f"📞 КОНТАКТЫ:\n• {PHONE}\n• WhatsApp: wa.me/79224333545\n• Telegram: t.me/+79224333545"
+                                    "text": "📞 НАШИ КОНТАКТЫ:\n\n• Телефон: +7 922 433-35-45\n\n• WhatsApp: wa.me/79224333545\n• Telegram: t.me/+79224333545"
                                 }, timeout=2)
                             
-                            elif text == "📍 АДРЕС":
+                            # 4. АДРЕС
+                            elif "адрес" in text_lower or "📍" in text:
+                                print("✅ Обрабатываю: АДРЕС")
                                 requests.post(f"{API_URL}sendMessage", json={
                                     "chat_id": chat_id,
-                                    "text": "📍 АДРЕС:\nул. Пушкина, 9а\n🕒 9:00-19:00"
+                                    "text": "📍 НАШ АДРЕС:\nул. Пушкина, Дом 9а\n\n🕒 9:00-19:00 ежедневно"
                                 }, timeout=2)
+                            
+                            else:
+                                print(f"❓ Неизвестная команда: '{text}'")
             
-            error_count = 0  # Сброс счётчика ошибок
-            
-        except requests.exceptions.RequestException as e:
-            error_count += 1
-            if error_count % 10 == 0:  # Логируем каждую 10-ю ошибку
-                print(f"⚠️ Ошибка сети ({error_count}): {type(e).__name__}")
-            
-            if error_count > 30:  # Если много ошибок подряд
-                print("🔄 Перезагрузка из-за множества ошибок...")
-                time.sleep(5)
-                error_count = 0
-            
-            time.sleep(0.1)
-        
         except Exception as e:
-            print(f"❌ Неизвестная ошибка: {e}")
+            print(f"⚠️ Ошибка: {e}")
             time.sleep(1)
 
 # Запускаем бота
