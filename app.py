@@ -118,10 +118,11 @@ def telegram_bot():
     
     while True:
         try:
+            # БЫСТРЫЙ запрос без долгого ожидания
             resp = requests.get(
                 f"{API_URL}getUpdates",
-                params={"offset": last_update_id + 1, "timeout": 10},
-                timeout=15
+                params={"offset": last_update_id + 1, "timeout": 2, "limit": 1},  # timeout 2 секунды!
+                timeout=3
             )
             
             if resp.status_code == 200:
@@ -142,14 +143,14 @@ def telegram_bot():
                                     "chat_id": chat_id,
                                     "text": "🚗 Добро пожаловать в автосервис!\n👇 Выберите раздел:",
                                     "reply_markup": keyboard
-                                })
+                                }, timeout=3)
                             
                             # Меню
                             elif text == "📋 МЕНЮ":
                                 requests.post(f"{API_URL}sendMessage", json={
                                     "chat_id": chat_id,
                                     "text": "🔧 НАШИ УСЛУГИ:\n\n• Диагностика - 2000р\n• Чип-тюнинг - 5000р\n• Прошивка ЭБУ - 4500р\n• Услуги автоэлектрика"
-                                })
+                                }, timeout=3)
                             
                             elif text == "📱 СОЦСЕТИ":
                                 message_text = (
@@ -162,7 +163,7 @@ def telegram_bot():
                                     "chat_id": chat_id,
                                     "text": message_text,
                                     "parse_mode": "HTML"
-                                })
+                                }, timeout=3)
                             
                             elif text == "📞 КОНТАКТЫ":
                                 message_text = (
@@ -176,29 +177,22 @@ def telegram_bot():
                                     "chat_id": chat_id,
                                     "text": message_text,
                                     "parse_mode": "HTML"
-                                })
+                                }, timeout=3)
                             
                             elif text == "📍 АДРЕС":
                                 requests.post(f"{API_URL}sendMessage", json={
                                     "chat_id": chat_id,
                                     "text": "📍 НАШ АДРЕС:\nул. Пушкина, Дом 9а\n\n🕒 9:00-19:00 ежедневно"
-                                })
+                                }, timeout=3)
             
-            time.sleep(1)
+            # Убрали time.sleep(1) - бот будет проверять мгновенно!
             
         except requests.exceptions.ConnectionError as e:
-            print(f"📡 Ошибка подключения (переподключение через 10с): {e}")
-            time.sleep(10)
+            print(f"📡 Ошибка подключения (переподключение через 2с): {e}")
+            time.sleep(2)
         except requests.exceptions.Timeout as e:
-            print(f"⏰ Таймаут запроса (переподключение через 5с): {e}")
-            time.sleep(5)
+            # Таймаут - это нормально, просто продолжаем
+            pass
         except Exception as e:
-            print(f"⚠️ Ошибка бота (переподключение через 5с): {e}")
-            time.sleep(5)
-
-# Запускаем бота в фоне
-threading.Thread(target=telegram_bot, daemon=True).start()
-
-if __name__ == '__main__':
-    print("🌐 Запуск Flask сервера...")
-    app.run(host='0.0.0.0', port=8080, debug=False)
+            print(f"⚠️ Ошибка бота (переподключение через 2с): {e}")
+            time.sleep(2)
