@@ -5,7 +5,7 @@ from flask import Flask
 import threading
 
 print("=" * 50)
-print("🚗 АВТОСЕРВИС БОТ (НОВОЕ МЕНЮ УСЛУГ)")
+print("🚗 АВТОСЕРВИС БОТ (БЕЗ ДВОЙНЫХ ОТВЕТОВ)")
 print("=" * 50)
 
 app = Flask(__name__)
@@ -25,12 +25,12 @@ def telegram_bot():
     
     API_URL = f"https://api.telegram.org/bot{TOKEN}/"
     last_update_id = 0
+    processed_messages = set()  # Храним ID обработанных сообщений
     
-    print("⚡ Бот запущен (новое меню)")
+    print("⚡ Бот запущен (защита от дубликатов)")
     
     while True:
         try:
-            # СУПЕР-БЫСТРЫЙ запрос
             resp = requests.get(
                 f"{API_URL}getUpdates",
                 params={"offset": last_update_id + 1, "timeout": 0.5},
@@ -43,11 +43,30 @@ def telegram_bot():
                     updates = data.get("result", [])
                     
                     for update in updates:
-                        last_update_id = update["update_id"]
+                        update_id = update["update_id"]
+                        
+                        # Проверяем, не обрабатывали ли уже это сообщение
+                        if update_id <= last_update_id:
+                            continue  # Пропускаем уже обработанное
+                        
+                        last_update_id = update_id
                         
                         if "message" in update:
+                            message_id = update["message"]["message_id"]
                             chat_id = update["message"]["chat"]["id"]
-                            text = update["message"].get("text", "").lower()
+                            text = update["message"].get("text", "").strip().lower()
+                            
+                            # Создаём уникальный ключ для сообщения
+                            message_key = f"{chat_id}_{message_id}"
+                            
+                            # Проверяем, не обрабатывали ли уже это сообщение
+                            if message_key in processed_messages:
+                                print(f"⏭️ Пропуск дубликата: {text[:20]}")
+                                continue
+                            
+                            # Добавляем в обработанные
+                            processed_messages.add(message_key)
+                            print(f"📩 Обработка: {text[:30]}")
                             
                             # /start
                             if "/start" in text:
@@ -66,39 +85,34 @@ def telegram_bot():
                                     "reply_markup": keyboard
                                 }, timeout=1)
                             
-                            # МЕНЮ (НОВОЕ с услугами)
+                            # МЕНЮ
                             elif "меню" in text or "📋" in text:
                                 menu_text = (
                                     "🔧 <b>НАШИ УСЛУГИ:</b>\n\n"
-                                    
                                     "<b>Ремонт двигателя</b>\n"
                                     "__________________\n"
                                     "Диагностика двигателя    500 ₽\n\n"
-                                    
                                     "<b>Ремонт электрооборудования</b>\n"
                                     "__________________\n"
                                     "Ремонт датчиков    от 500 ₽\n"
                                     "Ремонт стеклоподъёмника    от 1 000 ₽\n"
                                     "Замена проводки    от 3 000 ₽\n\n"
-                                    
                                     "<b>Диагностика авто</b>\n"
                                     "__________________\n"
                                     "Комплексная диагностика    от 1 000 ₽\n"
                                     "Компьютерная диагностика    от 500 ₽\n\n"
-                                    
                                     "<b>Установка доп. оборудования</b>\n"
                                     "__________________\n"
                                     "В зависимости от сложности\n\n"
                                     "📞 <b>Запись по телефону:</b> +7 922 433-35-45"
                                 )
-                                
                                 requests.post(f"{API_URL}sendMessage", json={
                                     "chat_id": chat_id,
                                     "text": menu_text,
                                     "parse_mode": "HTML"
                                 }, timeout=1)
                             
-                            # СОЦСЕТИ (с инстаграмом)
+                            # СОЦСЕТИ
                             elif "соцсети" in text or "📱" in text:
                                 requests.post(f"{API_URL}sendMessage", json={
                                     "chat_id": chat_id,
@@ -106,7 +120,7 @@ def telegram_bot():
                                     "parse_mode": "HTML"
                                 }, timeout=1)
                             
-                            # КОНТАКТЫ (полные с ссылками)
+                            # КОНТАКТЫ
                             elif "контакт" in text or "номера" in text or "📞" in text:
                                 contacts_text = (
                                     "📞 <b>НАШИ КОНТАКТЫ:</b>\n\n"
@@ -115,7 +129,6 @@ def telegram_bot():
                                     "• <a href='https://t.me/+79224333545'>Telegram</a>\n"
                                     "• <a href='https://www.avito.ru/kizilyurt/predlozheniya_uslug/avtoelektrik_diagnost_7856909160'>Авито</a>"
                                 )
-                                
                                 requests.post(f"{API_URL}sendMessage", json={
                                     "chat_id": chat_id,
                                     "text": contacts_text,
@@ -123,7 +136,7 @@ def telegram_bot():
                                     "disable_web_page_preview": True
                                 }, timeout=1)
                             
-                            # АДРЕС (полный)
+                            # АДРЕС
                             elif "адрес" in text or "📍" in text:
                                 address_text = (
                                     "📍 <b>НАШ АДРЕС:</b>\n"
@@ -131,7 +144,6 @@ def telegram_bot():
                                     "🗺️ <a href='https://share.google/aHKUZYfsRCtAVFY32'>Google Карты</a>\n\n"
                                     "🕒 <b>Режим работы:</b> 9:00-19:00 ежедневно"
                                 )
-                                
                                 requests.post(f"{API_URL}sendMessage", json={
                                     "chat_id": chat_id,
                                     "text": address_text,
@@ -139,9 +151,15 @@ def telegram_bot():
                                     "disable_web_page_preview": True
                                 }, timeout=1)
             
+            # Очистка старых записей (чтобы не накапливались)
+            if len(processed_messages) > 100:
+                processed_messages.clear()
+                print("🧹 Очистка кэша обработанных сообщений")
+            
         except requests.exceptions.Timeout:
             pass
-        except Exception:
+        except Exception as e:
+            print(f"⚠️ Ошибка: {e}")
             time.sleep(0.1)
 
 threading.Thread(target=telegram_bot, daemon=True).start()
