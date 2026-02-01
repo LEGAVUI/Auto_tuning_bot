@@ -1,21 +1,70 @@
+import os
+import requests
+import time
+from flask import Flask
+import threading
+from datetime import datetime
+
+print("=" * 50)
+print("🚗 АВТОСЕРВИС БОТ (ТУРБО РЕЖИМ)")
+print("=" * 50)
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "✅ Бот работает"
+
+@app.route('/health')
+def health():
+    return "OK", 200
+
+def telegram_bot():
+    print("=" * 50)
+    print("🔧 ЗАПУСК ПРОВЕРКИ ТОКЕНА")
+    print("=" * 50)
+    
+    # ========== ПРОВЕРКА ТОКЕНА ==========
+    TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
+    
+    if not TOKEN:
+        print("❌ Токен не найден")
+        return
+    
+    print(f"✅ Токен найден: {TOKEN[:15]}...")
+    
+    # Проверка токена
+    try:
+        test_url = f"https://api.telegram.org/bot{TOKEN}/getMe"
+        resp = requests.get(test_url, timeout=5)
+        if resp.json().get('ok'):
+            print(f"✅ Бот: @{resp.json()['result']['username']}")
+        else:
+            print("❌ Токен неверный")
+            return
+    except:
+        print("⚠️ Проверка токена пропущена")
+    
+    API_URL = f"https://api.telegram.org/bot{TOKEN}/"
+    
     # ========== УЛЬТРА-БЫСТРЫЙ ЦИКЛ ==========
     last_update_id = 0
     message_count = 0
     
-    print("⚡ Бот запущен в РЕЖИМЕ ТУРБО")
+    print("⚡ Бот запущен в ТУРБО-РЕЖИМЕ")
     print("=" * 50)
     
     while True:
         try:
-            # СУПЕР-БЫСТРЫЙ запрос (вместо 10 секунд - 500ms!)
+            # БЫСТРЫЙ запрос (500ms вместо 10 секунд!)
             resp = requests.get(
                 f"{API_URL}getUpdates",
                 params={
                     "offset": last_update_id + 1,
-                    "timeout": 0.5,  # 500ms вместо 10 секунд!
+                    "timeout": 0.5,  # 500ms!
                     "limit": 10
                 },
-                timeout=1  # Общий timeout 1 секунда
+                timeout=1
             )
             
             if resp.status_code == 200:
@@ -32,13 +81,12 @@
                             
                             if "message" in update:
                                 chat_id = update["message"]["chat"]["id"]
-                                text = update["message"].get("text", "").strip()
+                                text = update["message"].get("text", "").strip().lower()
                                 
-                                # БЫСТРАЯ обработка
                                 start_time = time.time()
                                 
                                 # /start
-                                if "/start" in text.lower():
+                                if "/start" in text:
                                     keyboard = {
                                         "keyboard": [
                                             [{"text": "📋 МЕНЮ"}],
@@ -52,12 +100,11 @@
                                         "chat_id": chat_id,
                                         "text": "🚗 Добро пожаловать!",
                                         "reply_markup": keyboard
-                                    }, timeout=1)  # Быстрая отправка
-                                    
-                                    print(f"✅ Ответ за {time.time()-start_time:.2f}с")
+                                    }, timeout=1)
+                                    print(f"✅ Старт за {time.time()-start_time:.2f}с")
                                 
                                 # МЕНЮ
-                                elif "📋" in text or "меню" in text.lower():
+                                elif "меню" in text or "📋" in text:
                                     requests.post(f"{API_URL}sendMessage", json={
                                         "chat_id": chat_id,
                                         "text": "🔧 Услуги:\n• Диагностика - 2000р\n• Чип-тюнинг - 5000р\n• Прошивка ЭБУ - 4500р"
@@ -65,7 +112,7 @@
                                     print(f"✅ Меню за {time.time()-start_time:.2f}с")
                                 
                                 # СОЦСЕТИ
-                                elif "📱" in text or "соцсети" in text.lower():
+                                elif "соцсети" in text or "📱" in text:
                                     requests.post(f"{API_URL}sendMessage", json={
                                         "chat_id": chat_id,
                                         "text": "📱 Instagram:\nhttps://www.instagram.com/auto_uzist_kiz"
@@ -73,46 +120,36 @@
                                     print(f"✅ Соцсети за {time.time()-start_time:.2f}с")
                                 
                                 # КОНТАКТЫ
-                                elif "📞" in text or "контакт" in text.lower() or "номера" in text.lower():
+                                elif "контакт" in text or "номера" in text or "📞" in text:
                                     requests.post(f"{API_URL}sendMessage", json={
                                         "chat_id": chat_id,
-                                        "text": (
-                                            "📞 Контакты:\n"
-                                            "• +7 922 433-35-45\n"
-                                            "• WhatsApp: wa.me/79224333545\n"
-                                            "• Telegram: t.me/+79224333545\n"
-                                            "• Авито: avito.ru/avtoelektrik_diagnost_7856909160"
-                                        )
+                                        "text": "📞 Контакты:\n+7 922 433-35-45\nWhatsApp: wa.me/79224333545"
                                     }, timeout=1)
                                     print(f"✅ Контакты за {time.time()-start_time:.2f}с")
                                 
                                 # АДРЕС
-                                elif "📍" in text or "адрес" in text.lower():
+                                elif "адрес" in text or "📍" in text:
                                     requests.post(f"{API_URL}sendMessage", json={
                                         "chat_id": chat_id,
-                                        "text": (
-                                            "📍 Адрес:\n"
-                                            "Кизилюрт, ул. Аскерханова 69\n"
-                                            "🗺️ Карты: share.google/aHKUZYfsRCtAVFY32\n"
-                                            "🕒 9:00-19:00"
-                                        )
+                                        "text": "📍 Адрес:\nКизилюрт, ул. Аскерханова 69\nКарты: share.google/aHKUZYfsRCtAVFY32"
                                     }, timeout=1)
                                     print(f"✅ Адрес за {time.time()-start_time:.2f}с")
-                    
-                    # НЕТ time.sleep() между запросами - максимальная скорость!
-                    # Просто сразу следующий цикл
                 else:
-                    # Если ошибка API - небольшая пауза
-                    time.sleep(0.1)
+                    time.sleep(0.05)
             else:
-                # Если HTTP ошибка - небольшая пауза
-                time.sleep(0.1)
+                time.sleep(0.05)
                 
         except requests.exceptions.Timeout:
-            # Таймаут - это нормально в быстром режиме
             pass
         except requests.exceptions.ConnectionError:
             time.sleep(1)
         except Exception as e:
             print(f"⚠️ Ошибка: {type(e).__name__}")
             time.sleep(1)
+
+# Запускаем бота
+threading.Thread(target=telegram_bot, daemon=True).start()
+
+if __name__ == '__main__':
+    print("🌐 Сервер запущен")
+    app.run(host='0.0.0.0', port=8080, debug=False, threaded=True)
