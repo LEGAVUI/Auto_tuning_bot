@@ -5,7 +5,7 @@ from flask import Flask
 import threading
 
 print("=" * 50)
-print("🚗 АВТОСЕРВИС БОТ (БЕЗ ДВОЙНЫХ ОТВЕТОВ)")
+print("🚗 АВТОСЕРВИС БОТ (СТРОГАЯ ЗАЩИТА ОТ ДУБЛИКАТОВ)")
 print("=" * 50)
 
 app = Flask(__name__)
@@ -25,9 +25,9 @@ def telegram_bot():
     
     API_URL = f"https://api.telegram.org/bot{TOKEN}/"
     last_update_id = 0
-    processed_messages = set()  # Храним ID обработанных сообщений
+    last_response_time = {}  # Время последнего ответа для каждого чата
     
-    print("⚡ Бот запущен (защита от дубликатов)")
+    print("⚡ Бот запущен (анти-дубль режим)")
     
     while True:
         try:
@@ -45,28 +45,28 @@ def telegram_bot():
                     for update in updates:
                         update_id = update["update_id"]
                         
-                        # Проверяем, не обрабатывали ли уже это сообщение
-                        if update_id <= last_update_id:
-                            continue  # Пропускаем уже обработанное
-                        
-                        last_update_id = update_id
+                        # Важно: обновляем last_update_id сразу
+                        if update_id > last_update_id:
+                            last_update_id = update_id
                         
                         if "message" in update:
-                            message_id = update["message"]["message_id"]
                             chat_id = update["message"]["chat"]["id"]
+                            message_id = update["message"]["message_id"]
                             text = update["message"].get("text", "").strip().lower()
                             
-                            # Создаём уникальный ключ для сообщения
-                            message_key = f"{chat_id}_{message_id}"
+                            print(f"📩 Chat:{chat_id} Msg:{message_id} Text:{text[:30]}")
                             
-                            # Проверяем, не обрабатывали ли уже это сообщение
-                            if message_key in processed_messages:
-                                print(f"⏭️ Пропуск дубликата: {text[:20]}")
+                            # Проверяем время последнего ответа в этом чате
+                            current_time = time.time()
+                            last_time = last_response_time.get(chat_id, 0)
+                            
+                            # Если прошло меньше 1 секунды с последнего ответа - пропускаем
+                            if current_time - last_time < 1.0:
+                                print(f"⏸️  Пропуск (тайм-аут): {text[:20]}")
                                 continue
                             
-                            # Добавляем в обработанные
-                            processed_messages.add(message_key)
-                            print(f"📩 Обработка: {text[:30]}")
+                            # Обновляем время ответа для этого чата
+                            last_response_time[chat_id] = current_time
                             
                             # /start
                             if "/start" in text:
@@ -84,6 +84,7 @@ def telegram_bot():
                                     "text": "🚗 Добро пожаловать в автосервис!\n👇 Выберите раздел:",
                                     "reply_markup": keyboard
                                 }, timeout=1)
+                                print(f"✅ Отправлено приветствие в чат {chat_id}")
                             
                             # МЕНЮ
                             elif "меню" in text or "📋" in text:
@@ -111,6 +112,7 @@ def telegram_bot():
                                     "text": menu_text,
                                     "parse_mode": "HTML"
                                 }, timeout=1)
+                                print(f"✅ Отправлено меню в чат {chat_id}")
                             
                             # СОЦСЕТИ
                             elif "соцсети" in text or "📱" in text:
@@ -119,6 +121,7 @@ def telegram_bot():
                                     "text": "📱 <b>МЫ В СОЦСЕТЯХ:</b>\n\n• Instagram: https://www.instagram.com/auto_uzist_kiz?utm_source=qr&igsh=d203cnZwMDF0eHV4",
                                     "parse_mode": "HTML"
                                 }, timeout=1)
+                                print(f"✅ Отправлены соцсети в чат {chat_id}")
                             
                             # КОНТАКТЫ
                             elif "контакт" in text or "номера" in text or "📞" in text:
@@ -135,6 +138,7 @@ def telegram_bot():
                                     "parse_mode": "HTML",
                                     "disable_web_page_preview": True
                                 }, timeout=1)
+                                print(f"✅ Отправлены контакты в чат {chat_id}")
                             
                             # АДРЕС
                             elif "адрес" in text or "📍" in text:
@@ -150,11 +154,7 @@ def telegram_bot():
                                     "parse_mode": "HTML",
                                     "disable_web_page_preview": True
                                 }, timeout=1)
-            
-            # Очистка старых записей (чтобы не накапливались)
-            if len(processed_messages) > 100:
-                processed_messages.clear()
-                print("🧹 Очистка кэша обработанных сообщений")
+                                print(f"✅ Отправлен адрес в чат {chat_id}")
             
         except requests.exceptions.Timeout:
             pass
